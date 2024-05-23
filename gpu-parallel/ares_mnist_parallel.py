@@ -37,22 +37,14 @@ print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
 
 BUFFER_SIZE = len(train_images)
 
-BATCH_SIZE_PER_REPLICA = 64
-GLOBAL_BATCH_SIZE = BATCH_SIZE_PER_REPLICA * strategy.num_replicas_in_sync
+##########
 
-EPOCHS = 50
+EPOCHS = 5
 
 REPEATS = 4
 results = []
 
-train_dataset = tf.data.Dataset.from_tensor_slices(
-    (train_images, train_labels)).shuffle(BUFFER_SIZE).batch(GLOBAL_BATCH_SIZE)
-test_dataset = tf.data.Dataset.from_tensor_slices(
-    (test_images, test_labels)).batch(GLOBAL_BATCH_SIZE)
-
-train_dist_dataset = strategy.experimental_distribute_dataset(train_dataset)
-test_dist_dataset = strategy.experimental_distribute_dataset(test_dataset)
-
+##########
 
 def create_model():
     regularizer = tf.keras.regularizers.L2(1e-5)
@@ -147,70 +139,89 @@ def distributed_train_step(dataset_inputs):
 def distributed_test_step(dataset_inputs):
     return strategy.run(test_step, args=(dataset_inputs,))
 
+default_test_range = range(3, 12, 1)
 
-for _repeat in range(REPEATS):
-    start_time = time()
-    
-    for epoch in range(EPOCHS):
-        # TRAIN LOOP
-        total_loss = 0.0
-        num_batches = 0
-        for x in train_dist_dataset:
-            total_loss += distributed_train_step(x)
-            num_batches += 1
-        train_loss = total_loss / num_batches
+for _pow in default_test_range:     # 2**3, 2**6
+    batch_size_per_replica = 2**_pow
+    GLOBAL_BATCH_SIZE = batch_size_per_replica * strategy.num_replicas_in_sync
 
-        # TEST LOOP
-        for x in test_dist_dataset:
-            distributed_test_step(x)
-
-        if epoch % 2 == 0:
-            checkpoint.save(checkpoint_prefix)
-
-        template = ("Epoch {}, Loss: {}, Accuracy: {}, Test Loss: {}, "
-                    "Test Accuracy: {}")
-        print(template.format(epoch + 1, train_loss,
-                            train_accuracy.result() * 100, test_loss.result(),
-                            test_accuracy.result() * 100))
-
-        test_loss.reset_states()
-        train_accuracy.reset_states()
-        test_accuracy.reset_states()
-
-    eval_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
-        name='eval_accuracy')
-
-    new_model = create_model()
-    new_optimizer = tf.keras.optimizers.Adam()
-
+    train_dataset = tf.data.Dataset.from_tensor_slices(
+        (train_images, train_labels)).shuffle(BUFFER_SIZE).batch(GLOBAL_BATCH_SIZE)
     test_dataset = tf.data.Dataset.from_tensor_slices(
         (test_images, test_labels)).batch(GLOBAL_BATCH_SIZE)
 
+    train_dist_dataset = strategy.experimental_distribute_dataset(train_dataset)
+    test_dist_dataset = strategy.experimental_distribute_dataset(test_dataset)
 
-    @tf.function
-    def eval_step(images, labels):
-        predictions = new_model(images, training=False)
-        eval_accuracy(labels, predictions)
+    for _repeat in range(REPEATS):
+        start_time = time()
+
+        for epoch in range(EPOCHS):
+            # TRAIN LOOP
+            total_loss = 0.0
+            num_batches = 0
+            for x in train_dist_dataset:
+                total_loss += distributed_train_step(x)
+                num_batches += 1
+            train_loss = total_loss / num_batches
+
+            # TEST LOOP
+            for x in test_dist_dataset:
+                distributed_test_step(x)
+
+            if epoch % 2 == 0:
+                checkpoint.save(checkpoint_prefix)
+
+            template = ("Epoch {}, Loss: {}, Accuracy: {}, Test Loss: {}, "
+                        "Test Accuracy: {}")
+            print(template.format(epoch + 1, train_loss,
+                                train_accuracy.result() * 100, test_loss.result(),
+                                test_accuracy.result() * 100))
+
+            test_loss.reset_states()
+            train_accuracy.reset_states()
+            test_accuracy.reset_states()
+
+        eval_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(
+            name='eval_accuracy')
+
+        new_model = create_model()
+        new_optimizer = tf.keras.optimizers.Adam()
+
+        test_dataset = tf.data.Dataset.from_tensor_slices(
+            (test_images, test_labels)).batch(GLOBAL_BATCH_SIZE)
 
 
-    checkpoint = tf.train.Checkpoint(optimizer=new_optimizer, model=new_model)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+        @tf.function
+        def eval_step(images, labels):
+            predictions = new_model(images, training=False)
+            eval_accuracy(labels, predictions)
 
-    for images, labels in test_dataset:
-        eval_step(images, labels)
 
-    print('Accuracy after restoring the saved model without strategy: {}'.format(
-        eval_accuracy.result() * 100))
+        checkpoint = tf.train.Checkpoint(optimizer=new_optimizer, model=new_model)
+        checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
-    end_time = time()
+        for images, labels in test_dataset:
+            eval_step(images, labels)
 
-    full_time = end_time - start_time
+        print('Accuracy after restoring the saved model without strategy: {}'.format(
+            eval_accuracy.result() * 100))
 
-    results.append(full_time)
+        end_time = time()
 
-print(f"repeats={REPEATS}, epochs={EPOCHS}")
-print(f"_results={results}")
-print(f"_sum={sum(results)}")
-print(f"_min={min(results)}")
-print(f"_max={max(results)}")
-print(f"_mean={sum(results)/len(results)}")
+        full_time = end_time - start_time
+
+        results.append((batch_size_per_replica, full_time))
+
+all_results = []
+for _pow in default_test_range:
+    results_for_batch = [_time for _batch, _time in results if _batch == 2**_pow]
+    print(f"batch_size={2**_pow}")
+    print(f"_results={results_for_batch}")
+    print(f"_sum={sum(results_for_batch)}")
+    print(f"_min={min(results_for_batch)}")
+    print(f"_max={max(results_for_batch)}")
+    print(f"_mean={sum(results_for_batch)/len(results_for_batch)}")
+    all_results.append((2**_pow, sum(results_for_batch)/len(results_for_batch)))
+
+print(all_results)
