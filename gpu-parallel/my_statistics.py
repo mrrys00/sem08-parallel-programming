@@ -72,10 +72,10 @@ plt.axhline(y=roof_gpu_2_stats, color='green', linestyle=':', label='2x GPU roof
 
 plt.xlabel('Batch size [2^batch_size]')
 plt.ylabel('Speedup')
-plt.title('Rooftop based on speedup')
+plt.title('Roofline model on speedup')
 plt.legend()
 
-plt.savefig('rooftop.png')
+plt.savefig('roofline.png')
 plt.show()
 
 # Normalized speedup
