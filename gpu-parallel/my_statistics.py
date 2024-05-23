@@ -34,7 +34,7 @@ norm_batch_cpu_stats = [math.log2(x) for x, _ in cpu_stats]
 norm_batch_gpu_1_stats = [math.log2(x) for x, _ in gpu_1_stats]
 norm_batch_gpu_2_stats = [math.log2(x) for x, _ in gpu_2_stats]
 
-plt.rcParams['font.size'] = 14
+plt.rcParams['font.size'] = 24
 plt.figure(figsize=(20,12))
 
 plt.plot(norm_batch_cpu_stats, speed_cpu_stats, label='CPU')
@@ -60,7 +60,7 @@ roof_cpu_stats = max(speed_cpu_stats)
 roof_gpu_1_stats = max(roof_speed_gpu_1_stats)
 roof_gpu_2_stats = max(roof_speed_gpu_2_stats)
 
-plt.rcParams['font.size'] = 14
+plt.rcParams['font.size'] = 24
 plt.figure(figsize=(20,12))
 
 plt.plot(norm_batch_cpu_stats, speed_cpu_stats, label='CPU')
@@ -96,7 +96,7 @@ efficiency_cpu_results = [s/gpu for s, gpu in zip(speed_cpu_stats, norm_batch_cp
 efficiency_gpu_1_results = [s/gpu for s, gpu in zip(speed_gpu_1_stats, norm_batch_gpu_1_stats)]
 efficiency_gpu_2_results = [s/gpu for s, gpu in zip(speed_gpu_2_stats, norm_batch_gpu_2_stats)]
 
-plt.rcParams['font.size'] = 14
+plt.rcParams['font.size'] = 24
 plt.figure(figsize=(20,12))
 
 plt.plot(norm_batch_cpu_stats, efficiency_cpu_results, label='CPU')
@@ -117,7 +117,7 @@ serial_cpu_results = [1 - (e / gpu) for e, gpu in zip(efficiency_cpu_results, no
 serial_gpu_1_results = [1 - (e / gpu) for e, gpu in zip(efficiency_gpu_1_results, norm_batch_gpu_1_stats)]
 serial_gpu_2_results = [1 - (e / gpu) for e, gpu in zip(efficiency_gpu_2_results, norm_batch_gpu_2_stats)]
 
-plt.rcParams['font.size'] = 14
+plt.rcParams['font.size'] = 24
 plt.figure(figsize=(20,12))
 
 plt.plot(norm_batch_cpu_stats, serial_cpu_results, label='CPU')
